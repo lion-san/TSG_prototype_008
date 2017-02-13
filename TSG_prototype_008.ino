@@ -37,8 +37,8 @@
 #define TX 9                            //GPS用のソフトウェアシリアル
 #define SENTENCES_BUFLEN      128        // GPSのメッセージデータバッファの個数
 
-#define UPDATE_INTERVAL        20       //モーションセンサーの値取得間隔
-#define DATAPUSH_INTERVAL     190       //モーションセンサーの値記録間隔
+#define UPDATE_INTERVAL        40       //モーションセンサーの値取得間隔
+#define DATAPUSH_INTERVAL     200       //モーションセンサーの値記録間隔
 #define SDWRITE_INTERVAL      30000
 
 //-------------------------------------------------------------------------
