@@ -37,7 +37,8 @@
 #define TX 9                            //GPS用のソフトウェアシリアル
 #define SENTENCES_BUFLEN      128        // GPSのメッセージデータバッファの個数
 
-#define UPDATE_INTERVAL        40       //モーションセンサーの値取得間隔
+#define MOTION_BUFLEN          70       //モーションセンサーのバッファサイズ
+
 #define DATAPUSH_INTERVAL     200       //モーションセンサーの値記録間隔
 #define SDWRITE_INTERVAL      30000
 
@@ -54,21 +55,18 @@ const int chipSelect = 10;//Arduino Micro
 
 File dataFile;                          //SD CARD
 boolean sdOpened = false;
+char fileName[16];
 //###############################################
 
 const int tact_switch = 7;//タクトスイッチ
-boolean switchIs;
-boolean switchOn;
-boolean switchRelease;
-
-
 volatile boolean enableWrite = false;
 
-///////////////////////カルマンフィルタ/////////////////////////////
-String motionData;
-volatile unsigned long d_time;
-
-////////////////////////////////////////////////////////////////
+char MotionHeader[] = "$MOTION,";
+char motionData[MOTION_BUFLEN];
+int save_rows = 0;
+char value_buf[10];
+char commma = ',';
+char lf = '\n';
 
 //----------------------------------------------------------------------
 //=== Global for GPS ===========================================
@@ -79,22 +77,15 @@ char buf[10];
 int SentencesNum = 0;                   // GPSのセンテンス文字列個数
 byte SentencesData[SENTENCES_BUFLEN] ;  // GPSのセンテンスデータバッファ
 boolean isReaded;                       //GPSの読み込みが完了したかどうか
-String gpsData;                         //GPSの読み込みが完了データ
-char datetime_org[6];
-String datetime = "";
-char date_org[2];
-String date = "";
+char datetime[6];
 boolean is_getdate = false;
 //======================================================
-char fileName[16];
 
 
 //@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 unsigned long delta;
-
-unsigned long delta1;
 unsigned long delta2;
-
+volatile unsigned long d_time;
 //@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 
@@ -116,7 +107,6 @@ void setup(void) {
 
   //===タクトスイッチ===========================================
   pinMode(tact_switch, INPUT);
-  switchIs = false;
   //=======================================================
 
   //=== LSM9DS1 Initialize =====================================
@@ -140,12 +130,11 @@ void setup(void) {
 
   //===MotionSensorのタイマー化 =================
   delay(100);
-  motionData = "";
+  //motionData = "";
   //=======================================================
   
   //DEBUG
   delta = millis();
-  delta1 = millis();
   delta2 = millis();
 
   //GPSより日付日時の取得
@@ -224,12 +213,6 @@ void loop(void) {
 
   //START MotionSensor ============================================
 
-  if( millis() - delta1 > UPDATE_INTERVAL )
-  {
-    updateMotionSensors();
-    delta1 = millis();
-  }
-
   if( millis() - delta2 > DATAPUSH_INTERVAL )
   {
     //Serial.print("DELTA2::");
@@ -272,7 +255,7 @@ void loop(void) {
             {
                // 有効になったら書込み開始
 
-               gpsData = String((char *)SentencesData );
+               //gpsData = String((char *)SentencesData );
                
                // read three sensors and append to the string:
                //記録用のセンサー値を取得
@@ -347,18 +330,16 @@ void writeDataToSdcard()
   // if the file is available, write to it:
   if (dataFile) {
     
-    dataFile.print(gpsData);
-    dataFile.print(motionData);
+    dataFile.print((char *)SentencesData);
 
     //dataFile.close();
     
     // print to the serial port too:
-    Serial.print(gpsData);
-    Serial.println(motionData);
+    Serial.print((char *)SentencesData);
     Serial.println(F("================================"));
 
     //クリア
-    motionData = "";
+    //motionData = "";
 
     if(millis() - delta > SDWRITE_INTERVAL)
     {
@@ -371,9 +352,37 @@ void writeDataToSdcard()
   else {
     Serial.println(F("error opening datalog.txt"));
   }
-
 }
 
+
+/**
+ * writeDataToSdcard
+ */
+ 
+void writeMotionDataToSdcard()
+{
+
+  if(!sdOpened)
+    sdcardOpen();
+
+
+  // if the file is available, write to it:
+  if (dataFile) {
+    
+    dataFile.print((char *)motionData);
+
+    //dataFile.close();
+    
+    // print to the serial port too:
+    Serial.print((char *)motionData);
+    
+  }
+  // if the file isn't open, pop up an error:
+  else {
+    Serial.println(F("error opening datalog.txt"));
+  }
+
+}
 
 /**
  * updateMotionSensors
@@ -397,42 +406,52 @@ void pushMotionData()
 {
   if(enableWrite){
 
+      updateMotionSensors();
+
       //時間の更新
       double dt = (double)(millis() - d_time); // Calculate delta time  
-
-      if(dt < 100)
-        return;   
       
       d_time = millis();
-    
-      
-      motionData += "$MOTION"; 
-      motionData += ",";
-    
-      motionData += dt; 
-      motionData += ",";
-    
-      motionData += imu.calcAccel(imu.ax);
-      motionData += ",";
-      motionData += imu.calcAccel(imu.ay);
-      motionData += ",";
-      motionData += imu.calcAccel(imu.az);
-      motionData += ",";
-    
-      motionData += imu.calcGyro(imu.gx);
-      motionData += ",";
-      motionData += imu.calcGyro(imu.gy);
-      motionData += ",";
-      motionData += imu.calcGyro(imu.gz);
-      motionData += ",";
-      
-      motionData += imu.calcMag(imu.mx);
-      motionData += ",";
-      motionData += imu.calcMag(imu.my);
-      motionData += ",";
-      motionData += imu.calcMag(imu.mz);   
-    
-      motionData += "\n";
+
+      //Header & Delta time
+      strcpy(motionData, MotionHeader);
+      itoa(dt, value_buf, 10);
+      strcat(motionData, value_buf);
+      strcat(motionData, commma);
+
+      //Accel
+      float2Bytes(imu.calcAccel(imu.ax), value_buf);      
+      strcat(motionData, value_buf);
+      strcat(motionData, commma);
+      float2Bytes(imu.calcAccel(imu.ay), value_buf);      
+      strcat(motionData, value_buf);
+      strcat(motionData, commma);
+      float2Bytes(imu.calcAccel(imu.az), value_buf);      
+      strcat(motionData, value_buf);
+      strcat(motionData, commma);
+      //Gyro
+      float2Bytes(imu.calcGyro(imu.gx), value_buf);      
+      strcat(motionData, value_buf);
+      strcat(motionData, commma);
+      float2Bytes(imu.calcGyro(imu.gy), value_buf);      
+      strcat(motionData, value_buf);
+      strcat(motionData, commma);
+      float2Bytes(imu.calcGyro(imu.gz), value_buf);      
+      strcat(motionData, value_buf);
+      strcat(motionData, commma);
+      //Magnet
+      float2Bytes(imu.calcMag(imu.mx), value_buf);      
+      strcat(motionData, value_buf);
+      strcat(motionData, commma);
+      float2Bytes(imu.calcMag(imu.my), value_buf);      
+      strcat(motionData, value_buf);
+      strcat(motionData, commma);
+      float2Bytes(imu.calcMag(imu.mz), value_buf);      
+      strcat(motionData, value_buf);
+      strcat(motionData, lf);
+
+      //行毎にMotionDataをSDカードに書き込み
+      writeMotionDataToSdcard();
   }
 
 }
@@ -475,14 +494,11 @@ void getGpsInfo()
     
             if ( c == 2 ) {
                  //Serial.println(F("----------------------------"));
-                 strncpy(datetime_org, readDataUntilComma(i+1), 6);
-                 datetime = datetime_org;
+                 strncpy(datetime, readDataUntilComma(i+1), 6);
                  Serial.println(datetime);
                  continue;
             }
             else if ( c == 10 ) {
-                 strncpy(date_org, readDataUntilComma(i+1), 2);
-                 date = date_org;
                  is_getdate = true;
                  continue;
             }
@@ -576,4 +592,18 @@ char* readDataUntilComma(int s)
 }
 
 
+/**
+  * float2Bytes
+  */
+void float2Bytes(float val,byte* bytes_array){
+  // Create union of shared memory space
+  union {
+    float float_variable;
+    byte temp_array[4];
+  } u;
+  // Overite bytes of union with float variable
+  u.float_variable = val;
+  // Assign bytes to input array
+  memcpy(bytes_array, u.temp_array, 4);
+}
 
