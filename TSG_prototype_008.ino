@@ -39,7 +39,7 @@
 
 #define MOTION_BUFLEN          70       //モーションセンサーのバッファサイズ
 
-#define DATAPUSH_INTERVAL     200       //モーションセンサーの値記録間隔
+#define DATAPUSH_INTERVAL     190       //モーションセンサーの値記録間隔
 #define SDWRITE_INTERVAL      30000
 
 //-------------------------------------------------------------------------
@@ -62,7 +62,8 @@ const int tact_switch = 7;//タクトスイッチ
 volatile boolean enableWrite = false;
 
 char MotionHeader[] = "$MOTION,";
-char motionData[MOTION_BUFLEN];
+//char motionData[MOTION_BUFLEN];
+String motionData;
 int save_rows = 0;
 char value_buf[10];
 char commma = ',';
@@ -139,6 +140,15 @@ void setup(void) {
 
   //GPSより日付日時の取得
   getGpsData();
+
+  //ファイル名の作成
+   // ファイル名決定
+  String s;
+  s = datetime;
+  s += ".csv";
+  s.toCharArray(fileName, 16);
+
+  Serial.println(fileName);
 
   //SDカードのオープンとファイル名の取得
   sdcardOpen();
@@ -283,15 +293,6 @@ void loop(void) {
  */
 void sdcardOpen()
 {
-  
- // ファイル名決定
-  String s;
-  
-    s = datetime;
-    s += ".csv";
-    s.toCharArray(fileName, 16);
-
-  Serial.println(fileName);
 
   dataFile = SD.open(fileName, FILE_WRITE);
 
@@ -369,12 +370,12 @@ void writeMotionDataToSdcard()
   // if the file is available, write to it:
   if (dataFile) {
     
-    dataFile.print((char *)motionData);
-
-    //dataFile.close();
-    
+    //dataFile.print((char *)motionData);
+    dataFile.println(motionData);
+ 
     // print to the serial port too:
-    Serial.print((char *)motionData);
+    //Serial.print((char *)motionData);
+    Serial.println(motionData);
     
   }
   // if the file isn't open, pop up an error:
@@ -410,9 +411,36 @@ void pushMotionData()
 
       //時間の更新
       double dt = (double)(millis() - d_time); // Calculate delta time  
-      
       d_time = millis();
+      
+      motionData = dt; 
+      motionData += ",";
+    
 
+      //[g]
+      motionData += imu.calcAccel(imu.ax);
+      motionData += ",";
+      motionData += imu.calcAccel(imu.ay);
+      motionData += ",";
+      motionData += imu.calcAccel(imu.az);
+      motionData += ",";
+
+      //[deg/s]
+      motionData += imu.calcGyro(imu.gx);
+      motionData += ",";
+      motionData += imu.calcGyro(imu.gy);
+      motionData += ",";
+      motionData += imu.calcGyro(imu.gz);
+      motionData += ",";
+
+      //[gauss]
+      motionData += imu.calcMag(imu.mx);
+      motionData += ",";
+      motionData += imu.calcMag(imu.my);
+      motionData += ",";
+      motionData += imu.calcMag(imu.mz);
+      
+/*
       //Header & Delta time
       strcpy(motionData, MotionHeader);
       itoa(dt, value_buf, 10);
@@ -449,7 +477,7 @@ void pushMotionData()
       float2Bytes(imu.calcMag(imu.mz), value_buf);      
       strcat(motionData, value_buf);
       strcat(motionData, lf);
-
+*/
       //行毎にMotionDataをSDカードに書き込み
       writeMotionDataToSdcard();
   }
