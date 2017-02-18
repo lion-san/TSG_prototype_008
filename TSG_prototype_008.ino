@@ -39,7 +39,7 @@
 
 #define MOTION_BUFLEN          70       //モーションセンサーのバッファサイズ
 
-#define DATAPUSH_INTERVAL     190       //モーションセンサーの値記録間隔
+#define DATAPUSH_INTERVAL     200       //モーションセンサーの値記録間隔
 #define SDWRITE_INTERVAL      30000
 
 //-------------------------------------------------------------------------
