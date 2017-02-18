@@ -412,8 +412,9 @@ void pushMotionData()
       //時間の更新
       double dt = (double)(millis() - d_time); // Calculate delta time  
       d_time = millis();
-      
-      motionData = dt; 
+
+      motionData = "$MOTION"; 
+      motionData += dt; 
       motionData += ",";
     
 
