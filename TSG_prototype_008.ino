@@ -413,7 +413,7 @@ void pushMotionData()
       double dt = (double)(millis() - d_time); // Calculate delta time  
       d_time = millis();
 
-      motionData = "$MOTION"; 
+      motionData = "$MOTION,"; 
       motionData += dt; 
       motionData += ",";
     
